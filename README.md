@@ -131,17 +131,6 @@ npm run dev
 ```
 The application will be available at [http://localhost:3000](http://localhost:3000)
 
-**Production build:**
-```bash
-npm run build
-npm start
-```
-
-**Linting:**
-```bash
-npm run lint
-```
-
 ## 🎨 Design System
 
 ### Color Palette
@@ -230,14 +219,6 @@ Clears all saved email history (requires confirmation).
 
 ## 📝 Development Notes
 
-### AI Assistant Usage
-This project was developed with assistance from **Windsurf AI**, which helped with:
-- Component architecture and structure
-- UI/UX improvements and design patterns
-- Code refactoring and optimization
-- Bug fixing and error handling
-- TypeScript type safety
-
 ### Key Implementation Details
 - **Client-side rendering** using `"use client"` directive
 - **State management** with React hooks (useState, useEffect, useMemo)
@@ -246,21 +227,11 @@ This project was developed with assistance from **Windsurf AI**, which helped wi
 - **Responsive design** using Tailwind CSS breakpoints
 
 ## 🚀 Deployment
+- Deployed in AWS EC2 instance
 
-### Vercel (Recommended)
-1. Connect your GitHub repository to Vercel
-2. Set environment variables in Vercel dashboard
-3. Deploy automatically on push to main branch
+### PM2 Process Manager
 
-### Other Platforms
-Build the application and deploy the `.next` folder:
-```bash
-npm run build
-```
-
-## 📄 License
-
-This project is part of the Humanly Email AI Generator assignment.
+PM2 is used to manage the Node.js process in production:
 
 ## 🤝 Contributing
 
