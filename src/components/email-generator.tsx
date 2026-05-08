@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { buildApiUrl } from "@/lib/api";
+import { ConfirmationModal } from "@/components/confirmation-modal";
 
 const toneOptions = [
   {
@@ -70,6 +71,10 @@ export function EmailGenerator() {
   const [isClearing, setIsClearing] = useState(false);
   const [copied, setCopied] = useState<"" | "email" | "body">("");
   const [toast, setToast] = useState<Toast | null>(null);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const HISTORY_ITEMS_PER_PAGE = 3;
 
   useEffect(() => {
     void loadHistory();
@@ -93,6 +98,32 @@ export function EmailGenerator() {
     () => toneOptions.find((option) => option.value === tone),
     [tone],
   );
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setHistoryCurrentPage(1);
+  }, [historySearchQuery]);
+
+  // Filter history based on search query
+  const filteredHistory = useMemo(() => {
+    if (!historySearchQuery.trim()) {
+      return history;
+    }
+    const query = historySearchQuery.toLowerCase();
+    return history.filter(
+      (item) =>
+        item.prompt.toLowerCase().includes(query) ||
+        item.subject.toLowerCase().includes(query) ||
+        item.tone.toLowerCase().includes(query),
+    );
+  }, [history, historySearchQuery]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredHistory.length / HISTORY_ITEMS_PER_PAGE);
+  const paginatedHistory = useMemo(() => {
+    const startIndex = (historyCurrentPage - 1) * HISTORY_ITEMS_PER_PAGE;
+    return filteredHistory.slice(startIndex, startIndex + HISTORY_ITEMS_PER_PAGE);
+  }, [filteredHistory, historyCurrentPage]);
 
   function showToast(message: string, type: Toast["type"]) {
     setToast({ message, type });
@@ -197,16 +228,48 @@ export function EmailGenerator() {
         ? `Subject: ${result.subject}\n\n${result.body}`
         : result.body;
 
-    await navigator.clipboard.writeText(emailText);
-    setCopied(mode);
-    showToast(
-      mode === "email" ? "Full email copied." : "Email body copied.",
-      "info",
-    );
+    try {
+      await navigator.clipboard.writeText(emailText);
+      setCopied(mode);
+      showToast(
+        mode === "email" ? "Full email copied." : "Email body copied.",
+        "info",
+      );
 
-    window.setTimeout(() => {
-      setCopied("");
-    }, 1600);
+      window.setTimeout(() => {
+        setCopied("");
+      }, 1600);
+    } catch {
+      // Fallback for non-secure contexts (HTTP) or when clipboard API fails
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = emailText;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+
+        if (successful) {
+          setCopied(mode);
+          showToast(
+            mode === "email" ? "Full email copied." : "Email body copied.",
+            "info",
+          );
+          window.setTimeout(() => {
+            setCopied("");
+          }, 1600);
+        } else {
+          showToast("Failed to copy. Please select and copy manually.", "error");
+        }
+      } catch {
+        showToast("Failed to copy. Please select and copy manually.", "error");
+      }
+    }
   }
 
   async function handleClearHistory() {
@@ -375,7 +438,7 @@ export function EmailGenerator() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="inline-flex flex-1 items-center justify-center rounded-full bg-[var(--accent)] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-deep)] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="cursor-pointer inline-flex flex-1 items-center justify-center rounded-full bg-[var(--accent)] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-deep)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isLoading ? "Generating email..." : "Generate Email"}
                 </button>
@@ -386,8 +449,9 @@ export function EmailGenerator() {
                     setResult(null);
                     setError("");
                     setCopied("");
+                    showToast("Form cleared.", "info");
                   }}
-                  className="inline-flex items-center justify-center rounded-full border border-[rgba(31,41,55,0.12)] px-5 py-3.5 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                  className="cursor-pointer inline-flex items-center justify-center rounded-full border border-[rgba(31,41,55,0.12)] px-5 py-3.5 text-sm font-semibold text-slate-700 transition hover:bg-white"
                 >
                   Clear
                 </button>
@@ -414,7 +478,7 @@ export function EmailGenerator() {
                 type="button"
                 disabled={!result}
                 onClick={() => void handleCopy("email")}
-                className="rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                className="cursor-pointer rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {copied === "email" ? "Copied full email" : "Copy email"}
               </button>
@@ -422,9 +486,21 @@ export function EmailGenerator() {
                 type="button"
                 disabled={!result}
                 onClick={() => void handleCopy("body")}
-                className="rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                className="cursor-pointer rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {copied === "body" ? "Copied body" : "Copy body"}
+              </button>
+              <button
+                type="button"
+                disabled={!result}
+                onClick={() => {
+                  setResult(null);
+                  setCopied("");
+                  showToast("Generated email cleared.", "info");
+                }}
+                className="cursor-pointer rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Clear
               </button>
             </div>
           </div>
@@ -499,23 +575,36 @@ export function EmailGenerator() {
             {history.length ? (
               <button
                 type="button"
-                onClick={() => void handleClearHistory()}
+                onClick={() => setShowClearConfirmModal(true)}
                 disabled={isClearing}
-                className="rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="cursor-pointer rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isClearing ? "Clearing..." : "Clear all"}
               </button>
             ) : null}
           </div>
 
+          {/* Search Input */}
+          {history.length ? (
+            <div className="mt-5">
+              <input
+                type="text"
+                value={historySearchQuery}
+                onChange={(e) => setHistorySearchQuery(e.target.value)}
+                placeholder="Search by prompt, subject, or tone..."
+                className="w-full rounded-2xl border border-[rgba(31,41,55,0.12)] bg-white/70 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[rgba(188,92,52,0.45)] focus:ring-4 focus:ring-[rgba(188,92,52,0.12)]"
+              />
+            </div>
+          ) : null}
+
           <div className="mt-6 space-y-3">
-            {history.length ? (
-              history.map((item) => (
+            {paginatedHistory.length ? (
+              paginatedHistory.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => loadHistoryItem(item)}
-                  className="w-full rounded-[1.5rem] border border-[rgba(31,41,55,0.08)] bg-white/65 p-4 text-left transition hover:-translate-y-0.5 hover:bg-white"
+                  className="cursor-pointer w-full rounded-[1.5rem] border border-[rgba(31,41,55,0.08)] bg-white/65 p-4 text-left transition hover:-translate-y-0.5 hover:bg-white"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="rounded-full bg-[rgba(188,92,52,0.12)] px-3 py-1 text-xs font-semibold text-[var(--accent-deep)]">
@@ -538,9 +627,60 @@ export function EmailGenerator() {
                 {historyStatus}
               </div>
             )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && paginatedHistory.length > 0 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button
+                type="button"
+                onClick={() => setHistoryCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={historyCurrentPage === 1}
+                className="cursor-pointer rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setHistoryCurrentPage(page)}
+                    className={`cursor-pointer rounded-full px-3 py-2 text-sm font-semibold transition ${
+                      historyCurrentPage === page
+                        ? "bg-(--accent) text-white"
+                        : "border border-[rgba(31,41,55,0.12)] text-slate-700 hover:bg-white"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={historyCurrentPage === totalPages}
+                className="cursor-pointer rounded-full border border-[rgba(31,41,55,0.12)] px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
           </div>
         </aside>
       </section>
+
+      <ConfirmationModal
+        isOpen={showClearConfirmModal}
+        title="Clear All History"
+        message="All Generated Response will be cleared"
+        confirmText="OK"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setShowClearConfirmModal(false);
+          void handleClearHistory();
+        }}
+        onCancel={() => setShowClearConfirmModal(false)}
+      />
     </main>
   );
 }
